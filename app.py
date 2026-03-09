@@ -17,6 +17,15 @@ def index():
     return render_template("index.html", lojas=lojas)
 
 
+def converter_valor(valor):
+    try:
+        if isinstance(valor, str):
+            valor = valor.replace(".", "").replace(",", ".")
+        return float(valor)
+    except:
+        return 0
+
+
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
@@ -32,28 +41,50 @@ def conciliar():
 
         try:
 
-            df = pd.read_excel(file, skiprows=6)
+            df = pd.read_excel(file)
+
+            # encontrar colunas automaticamente
+            col_produto = None
+            col_operacao = None
+            col_valor = None
+
+            for col in df.columns:
+
+                nome = str(col).lower()
+
+                if "produto" in nome:
+                    col_produto = col
+
+                if "opera" in nome:
+                    col_operacao = col
+
+                if "confirm" in nome:
+                    col_valor = col
+
+            if not col_produto or not col_valor:
+                continue
 
             ultimo_produto = None
 
             for index, row in df.iterrows():
 
-                produto = str(row.get("Produto", "")).strip()
-                operacao = str(row.get("Operação", "")).strip()
-                valor = row.get("Confirmadas", 0)
+                produto = str(row[col_produto]).strip()
 
-                if produto:
+                operacao = ""
+                if col_operacao:
+                    operacao = str(row[col_operacao]).strip()
+
+                valor = converter_valor(row[col_valor])
+
+                if produto and produto != "nan":
                     ultimo_produto = produto
 
-                if operacao == "Total" and ultimo_produto:
+                if operacao.lower() == "total" and ultimo_produto:
 
                     if ultimo_produto not in resumo_tef:
                         resumo_tef[ultimo_produto] = 0
 
-                    try:
-                        resumo_tef[ultimo_produto] += float(valor)
-                    except:
-                        pass
+                    resumo_tef[ultimo_produto] += valor
 
         except Exception as e:
             print("Erro lendo TEF:", e)
