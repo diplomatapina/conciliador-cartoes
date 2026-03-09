@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Conciliação de Cartões</title>
+</head>
+
+<body>
+
+<h1>Sistema de Conciliação</h1>
+
+<form action="/conciliar" method="post">
+
+<label>Selecione a loja:</label>
+
+<select name="loja">
+{% for loja in lojas %}
+<option value="{{ loja }}">{{ loja }}</option>
+{% endfor %}
+</select>
+
+<br><br>
+
+<button type="submit">Iniciar Conciliação</button>
+
+</form>
+
+</body>
+</html>
