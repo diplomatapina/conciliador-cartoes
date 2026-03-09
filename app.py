@@ -43,7 +43,7 @@ def conciliar():
 
             df = pd.read_excel(file)
 
-            # encontrar colunas automaticamente
+            # localizar colunas automaticamente
             col_produto = None
             col_operacao = None
             col_valor = None
@@ -72,14 +72,15 @@ def conciliar():
 
                 operacao = ""
                 if col_operacao:
-                    operacao = str(row[col_operacao]).strip()
+                    operacao = str(row[col_operacao]).strip().lower()
 
                 valor = converter_valor(row[col_valor])
 
                 if produto and produto != "nan":
                     ultimo_produto = produto
 
-                if operacao.lower() == "total" and ultimo_produto:
+                # aceita qualquer texto que contenha "total"
+                if "total" in operacao and ultimo_produto:
 
                     if ultimo_produto not in resumo_tef:
                         resumo_tef[ultimo_produto] = 0
