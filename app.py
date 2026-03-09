@@ -31,19 +31,25 @@ def conciliar():
     for file in tef_files:
 
         try:
-            df = pd.read_excel(file)
+
+            df = pd.read_excel(file, skiprows=6)
 
             for index, row in df.iterrows():
 
                 produto = str(row.get("Produto", "")).strip()
+                operacao = str(row.get("Operação", "")).strip()
                 valor = row.get("Confirmadas", 0)
 
-                if produto and valor:
+                # usamos apenas a linha TOTAL
+                if operacao == "Total":
 
                     if produto not in resumo_tef:
                         resumo_tef[produto] = 0
 
-                    resumo_tef[produto] += float(valor)
+                    try:
+                        resumo_tef[produto] += float(valor)
+                    except:
+                        pass
 
         except Exception as e:
             print("Erro lendo TEF:", e)
@@ -53,9 +59,13 @@ def conciliar():
     resultado += "<h2>Resumo TEF</h2>"
 
     if resumo_tef:
+
         for produto, valor in resumo_tef.items():
-            resultado += f"{produto}: R$ {valor:.2f}<br>"
+
+            resultado += f"{produto}: R$ {valor:,.2f}<br>"
+
     else:
+
         resultado += "Nenhum dado TEF encontrado<br>"
 
     resultado += "<br><h2>Arquivos recebidos</h2>"
