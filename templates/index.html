@@ -1,14 +1,16 @@
 <!DOCTYPE html>
+
 <html>
+
 <head>
-    <title>Conciliação de Cartões</title>
+<title>Conciliação de Cartões</title>
 </head>
 
 <body>
 
 <h1>Sistema de Conciliação</h1>
 
-<form action="/conciliar" method="post">
+<form action="/conciliar" method="post" enctype="multipart/form-data">
 
 <label>Selecione a loja:</label>
 
@@ -20,9 +22,18 @@
 
 <br><br>
 
-<button type="submit">Iniciar Conciliação</button>
+<label>Upload relatório TEF (Excel):</label><br> <input type="file" name="tef_file" accept=".xlsx,.xls">
+
+<br><br>
+
+<label>Upload extrato bancário (CSV):</label><br> <input type="file" name="extrato_file" accept=".csv">
+
+<br><br>
+
+<button type="submit">Conciliar</button>
 
 </form>
 
 </body>
+
 </html>
