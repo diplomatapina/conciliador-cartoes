@@ -34,20 +34,24 @@ def conciliar():
 
             df = pd.read_excel(file, skiprows=6)
 
+            ultimo_produto = None
+
             for index, row in df.iterrows():
 
                 produto = str(row.get("Produto", "")).strip()
                 operacao = str(row.get("Operação", "")).strip()
                 valor = row.get("Confirmadas", 0)
 
-                # usamos apenas a linha TOTAL
-                if operacao == "Total":
+                if produto:
+                    ultimo_produto = produto
 
-                    if produto not in resumo_tef:
-                        resumo_tef[produto] = 0
+                if operacao == "Total" and ultimo_produto:
+
+                    if ultimo_produto not in resumo_tef:
+                        resumo_tef[ultimo_produto] = 0
 
                     try:
-                        resumo_tef[produto] += float(valor)
+                        resumo_tef[ultimo_produto] += float(valor)
                     except:
                         pass
 
@@ -61,11 +65,9 @@ def conciliar():
     if resumo_tef:
 
         for produto, valor in resumo_tef.items():
-
             resultado += f"{produto}: R$ {valor:,.2f}<br>"
 
     else:
-
         resultado += "Nenhum dado TEF encontrado<br>"
 
     resultado += "<br><h2>Arquivos recebidos</h2>"
