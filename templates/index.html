@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html>
 
 <head>
@@ -12,24 +11,27 @@
 
 <form action="/conciliar" method="post" enctype="multipart/form-data">
 
-<label>Selecione a loja:</label><br> <select name="loja">
+<label>Selecione a loja:</label>
+<select name="loja">
 {% for loja in lojas %}
-
 <option value="{{ loja }}">{{ loja }}</option>
 {% endfor %}
 </select>
 
 <br><br>
 
-<label>Upload relatório TEF (Excel):</label><br> <input type="file" name="tef_file" accept=".xlsx,.xls">
+<label>Upload relatórios TEF (Excel):</label><br>
+<input type="file" name="tef_files" accept=".xlsx,.xls" multiple>
 
 <br><br>
 
-<label>Upload relatório Maquineta (PDF):</label><br> <input type="file" name="maquineta_file" accept=".pdf">
+<label>Upload relatórios Maquineta (PDF):</label><br>
+<input type="file" name="maquineta_files" accept=".pdf" multiple>
 
 <br><br>
 
-<label>Upload extrato bancário (CSV):</label><br> <input type="file" name="extrato_file" accept=".csv">
+<label>Upload extrato bancário (CSV):</label><br>
+<input type="file" name="extrato_file" accept=".csv">
 
 <br><br>
 
