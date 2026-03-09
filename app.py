@@ -17,95 +17,32 @@ def index():
     return render_template("index.html", lojas=lojas)
 
 
-def converter_valor(valor):
-    try:
-        if isinstance(valor, str):
-            valor = valor.replace(".", "").replace(",", ".")
-        return float(valor)
-    except:
-        return 0
-
-
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
     loja = request.form.get("loja")
-
     tef_files = request.files.getlist("tef_files")
-    maquineta_files = request.files.getlist("maquineta_files")
-    extrato_file = request.files.get("extrato_file")
 
-    resumo_tef = {}
+    resultado = f"<h1>Diagnóstico TEF - Loja {loja}</h1>"
 
     for file in tef_files:
+
+        resultado += "<h2>Arquivo recebido</h2>"
 
         try:
 
             df = pd.read_excel(file)
 
-            # localizar colunas automaticamente
-            col_produto = None
-            col_operacao = None
-            col_valor = None
+            resultado += "<b>Colunas detectadas:</b><br>"
+            resultado += str(list(df.columns)) + "<br><br>"
 
-            for col in df.columns:
+            resultado += "<b>Primeiras linhas:</b><br>"
 
-                nome = str(col).lower()
-
-                if "produto" in nome:
-                    col_produto = col
-
-                if "opera" in nome:
-                    col_operacao = col
-
-                if "confirm" in nome:
-                    col_valor = col
-
-            if not col_produto or not col_valor:
-                continue
-
-            ultimo_produto = None
-
-            for index, row in df.iterrows():
-
-                produto = str(row[col_produto]).strip()
-
-                operacao = ""
-                if col_operacao:
-                    operacao = str(row[col_operacao]).strip().lower()
-
-                valor = converter_valor(row[col_valor])
-
-                if produto and produto != "nan":
-                    ultimo_produto = produto
-
-                # aceita qualquer texto que contenha "total"
-                if "total" in operacao and ultimo_produto:
-
-                    if ultimo_produto not in resumo_tef:
-                        resumo_tef[ultimo_produto] = 0
-
-                    resumo_tef[ultimo_produto] += valor
+            resultado += df.head(10).to_html()
 
         except Exception as e:
-            print("Erro lendo TEF:", e)
 
-    resultado = f"<h1>Conciliação - Loja {loja}</h1>"
-
-    resultado += "<h2>Resumo TEF</h2>"
-
-    if resumo_tef:
-
-        for produto, valor in resumo_tef.items():
-            resultado += f"{produto}: R$ {valor:,.2f}<br>"
-
-    else:
-        resultado += "Nenhum dado TEF encontrado<br>"
-
-    resultado += "<br><h2>Arquivos recebidos</h2>"
-    resultado += f"Arquivos TEF enviados: {len(tef_files)}<br>"
-    resultado += f"Arquivos Maquineta enviados: {len(maquineta_files)}<br>"
-    resultado += f"Extrato enviado: {'Sim' if extrato_file else 'Não'}<br>"
+            resultado += f"Erro lendo arquivo: {e}"
 
     return resultado
 
