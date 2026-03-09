@@ -17,32 +17,63 @@ def index():
     return render_template("index.html", lojas=lojas)
 
 
+def converter_valor(valor):
+    try:
+        if isinstance(valor, str):
+            valor = valor.replace(".", "").replace(",", ".")
+        return float(valor)
+    except:
+        return 0
+
+
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
     loja = request.form.get("loja")
+
     tef_files = request.files.getlist("tef_files")
 
-    resultado = f"<h1>Diagnóstico TEF - Loja {loja}</h1>"
+    resumo_tef = {}
 
     for file in tef_files:
 
-        resultado += "<h2>Arquivo recebido</h2>"
-
         try:
 
-            df = pd.read_excel(file)
+            # ignorar as primeiras linhas do relatório
+            df = pd.read_excel(file, skiprows=5)
 
-            resultado += "<b>Colunas detectadas:</b><br>"
-            resultado += str(list(df.columns)) + "<br><br>"
+            ultimo_produto = None
 
-            resultado += "<b>Primeiras linhas:</b><br>"
+            for index, row in df.iterrows():
 
-            resultado += df.head(10).to_html()
+                produto = str(row[3]).strip()
+                operacao = str(row[5]).strip().lower()
+                valor = converter_valor(row[6])
+
+                if produto and produto != "nan":
+                    ultimo_produto = produto
+
+                if "total" in operacao and ultimo_produto:
+
+                    if ultimo_produto not in resumo_tef:
+                        resumo_tef[ultimo_produto] = 0
+
+                    resumo_tef[ultimo_produto] += valor
 
         except Exception as e:
+            print("Erro lendo TEF:", e)
 
-            resultado += f"Erro lendo arquivo: {e}"
+    resultado = f"<h1>Conciliação - Loja {loja}</h1>"
+
+    resultado += "<h2>Resumo TEF</h2>"
+
+    if resumo_tef:
+
+        for produto, valor in resumo_tef.items():
+            resultado += f"{produto}: R$ {valor:,.2f}<br>"
+
+    else:
+        resultado += "Nenhum dado TEF encontrado<br>"
 
     return resultado
 
