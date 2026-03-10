@@ -3,7 +3,6 @@ import pandas as pd
 
 app = Flask(__name__)
 
-
 @app.route("/")
 def home():
     return """
@@ -23,42 +22,24 @@ def home():
     <input type="file" name="tef_files" multiple>
     </p>
 
-    <p>
-    Upload relatórios Maquineta (PDF):<br>
-    <input type="file" name="maquineta_files" multiple>
-    </p>
-
-    <p>
-    Upload extrato bancário (CSV):<br>
-    <input type="file" name="extrato_file">
-    </p>
-
     <button type="submit">Conciliar</button>
 
     </form>
     """
 
-
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
-    loja = request.form.get("loja")
+    arquivos = request.files.getlist("tef_files")
 
-    tef_files = request.files.getlist("tef_files")
-    maquineta_files = request.files.getlist("maquineta_files")
-    extrato_file = request.files.get("extrato_file")
+    resultado = "<h2>Diagnóstico do Excel</h2>"
 
-    resultado = f"<h2>Conciliação - Loja {loja}</h2>"
+    for arquivo in arquivos:
 
-    resultado += "<h3>Arquivos recebidos</h3>"
+        df = pd.read_excel(arquivo, header=None)
 
-    resultado += f"Arquivos TEF enviados: {len(tef_files)}<br>"
-    resultado += f"Arquivos Maquineta enviados: {len(maquineta_files)}<br>"
-
-    if extrato_file and extrato_file.filename:
-        resultado += "Extrato enviado: Sim<br>"
-    else:
-        resultado += "Extrato enviado: Não<br>"
+        resultado += "<h3>Primeiras 15 linhas da planilha</h3>"
+        resultado += df.head(15).to_html()
 
     return resultado
 
