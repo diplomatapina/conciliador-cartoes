@@ -1,20 +1,28 @@
-import streamlit as st
+from flask import Flask, request, render_template_string
 import pandas as pd
+import io
 
-st.set_page_config(page_title="Conciliação TEF", layout="wide")
+app = Flask(__name__)
 
-st.title("Conciliação de Cartões")
+HTML = """
+<h2>Conciliação TEF</h2>
 
-st.write("Envie os três arquivos para conciliar:")
+<form method="post" action="/conciliar" enctype="multipart/form-data">
+    <p>Relatório TEF:</p>
+    <input type="file" name="tef">
+    <br><br>
+    <button type="submit">Conciliar</button>
+</form>
 
-tef_file = st.file_uploader("1️⃣ Relatório TEF", type=["csv"])
-maq_file = st.file_uploader("2️⃣ Relatório da Maquineta", type=["csv","xlsx"])
-ext_file = st.file_uploader("3️⃣ Extrato Bancário", type=["csv","xlsx"])
+{% if tabela %}
+<h3>Resumo</h3>
+{{ tabela|safe }}
 
+<h3>Total</h3>
+<p><b>{{ total }}</b></p>
+{% endif %}
+"""
 
-# ---------------------------
-# LEITURA DO TEF
-# ---------------------------
 
 def carregar_tef(file):
 
@@ -25,96 +33,71 @@ def carregar_tef(file):
         skiprows=4
     )
 
+    # limpar nomes das colunas
     df.columns = df.columns.str.replace('"', '').str.strip()
 
-    df["Valor"] = (
-        df["Valor"]
-        .astype(str)
-        .str.replace(",", ".")
-        .astype(float)
+    # garantir que coluna valor existe
+    if "Valor" in df.columns:
+
+        df["Valor"] = (
+            df["Valor"]
+            .astype(str)
+            .str.replace(",", ".")
+            .astype(float)
+        )
+
+    # converter data se existir
+    if "Data" in df.columns:
+        df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
+
+    # manter apenas aprovadas
+    if "Estado Transação" in df.columns:
+        df = df[df["Estado Transação"].str.contains("Efetuada", na=False)]
+
+    return df
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return render_template_string(HTML)
+
+
+@app.route("/conciliar", methods=["POST"])
+def conciliar():
+
+    if "tef" not in request.files:
+        return "Arquivo TEF não enviado"
+
+    file = request.files["tef"]
+
+    if file.filename == "":
+        return "Arquivo inválido"
+
+    stream = io.StringIO(file.stream.read().decode("latin1"))
+
+    df = carregar_tef(stream)
+
+    if "Tipo Produto" in df.columns:
+
+        resumo = (
+            df.groupby("Tipo Produto")["Valor"]
+            .sum()
+            .reset_index()
+        )
+
+    else:
+        resumo = df
+
+    tabela = resumo.to_html(index=False)
+
+    total = f"R$ {df['Valor'].sum():,.2f}"
+
+    return render_template_string(
+        HTML,
+        tabela=tabela,
+        total=total
     )
 
-    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
 
-    df = df[df["Estado Transação"] == "Efetuada PDV"]
-
-    return df
-
-
-# ---------------------------
-# LEITURA MAQUINETA
-# ---------------------------
-
-def carregar_maquineta(file):
-
-    if file.name.endswith("xlsx"):
-        df = pd.read_excel(file)
-    else:
-        df = pd.read_csv(file)
-
-    return df
-
-
-# ---------------------------
-# LEITURA EXTRATO
-# ---------------------------
-
-def carregar_extrato(file):
-
-    if file.name.endswith("xlsx"):
-        df = pd.read_excel(file)
-    else:
-        df = pd.read_csv(file)
-
-    return df
-
-
-# ---------------------------
-# PROCESSAMENTO
-# ---------------------------
-
-if tef_file:
-
-    tef = carregar_tef(tef_file)
-
-    st.subheader("TEF carregado")
-
-    st.dataframe(tef, use_container_width=True)
-
-    resumo_tef = (
-        tef.groupby(["Data","Tipo Produto"])["Valor"]
-        .sum()
-        .reset_index()
-    )
-
-    st.subheader("Resumo TEF")
-
-    st.dataframe(resumo_tef)
-
-
-    if maq_file:
-
-        maq = carregar_maquineta(maq_file)
-
-        st.subheader("Relatório Maquineta")
-
-        st.dataframe(maq)
-
-    if ext_file:
-
-        ext = carregar_extrato(ext_file)
-
-        st.subheader("Extrato Bancário")
-
-        st.dataframe(ext)
-
-
-    # ---------------------------
-    # RESUMO GERAL
-    # ---------------------------
-
-    st.subheader("Totais TEF")
-
-    total_tef = tef["Valor"].sum()
-
-    st.metric("Total TEF", f"R$ {total_tef:,.2f}")
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
