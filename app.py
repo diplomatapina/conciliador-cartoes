@@ -26,23 +26,10 @@ def converter_valor(valor):
         return 0
 
 
-def encontrar_cabecalho(df):
-
-    for i in range(len(df)):
-
-        linha = df.iloc[i].astype(str).str.lower()
-
-        if linha.str.contains("produto").any():
-            return i
-
-    return None
-
-
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
     loja = request.form.get("loja")
-
     tef_files = request.files.getlist("tef_files")
 
     resumo_tef = {}
@@ -53,45 +40,41 @@ def conciliar():
 
             df = pd.read_excel(file, header=None)
 
-            linha_cabecalho = encontrar_cabecalho(df)
-
-            if linha_cabecalho is None:
-                continue
-
-            df = pd.read_excel(file, header=linha_cabecalho)
-
-            col_produto = None
-            col_operacao = None
-            col_valor = None
-
-            for col in df.columns:
-
-                nome = str(col).lower()
-
-                if "produto" in nome:
-                    col_produto = col
-
-                if "opera" in nome:
-                    col_operacao = col
-
-                if "confirm" in nome:
-                    col_valor = col
-
-            if not col_produto or not col_operacao or not col_valor:
-                continue
-
             ultimo_produto = None
 
             for _, row in df.iterrows():
 
-                produto = str(row[col_produto]).strip()
-                operacao = str(row[col_operacao]).strip().lower()
-                valor = converter_valor(row[col_valor])
+                linha = [str(x).strip() for x in row]
 
-                if produto and produto != "nan":
-                    ultimo_produto = produto
+                # detectar produto
+                for item in linha:
 
-                if "total" in operacao and ultimo_produto:
+                    if item.lower() in [
+                        "pix",
+                        "ticket alimentacao",
+                        "ticket flex",
+                        "ticket restaurante",
+                        "alelo alimentação",
+                        "alelo refeicao",
+                        "amex credito",
+                    ]:
+
+                        ultimo_produto = item
+
+                # detectar linha total
+                if "total" in " ".join(linha).lower() and ultimo_produto:
+
+                    valor = 0
+
+                    for item in linha:
+
+                        try:
+                            valor = converter_valor(item)
+
+                            if valor > 0:
+                                break
+                        except:
+                            pass
 
                     if ultimo_produto not in resumo_tef:
                         resumo_tef[ultimo_produto] = 0
@@ -107,7 +90,6 @@ def conciliar():
     if resumo_tef:
 
         for produto, valor in resumo_tef.items():
-
             resultado += f"{produto}: R$ {valor:,.2f}<br>"
 
     else:
