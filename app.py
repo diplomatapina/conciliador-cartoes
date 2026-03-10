@@ -43,67 +43,61 @@ def home():
     """
 
 
-def converter_valor(v):
-    try:
-        if isinstance(v, (int, float)):
-            return float(v)
-
-        v = str(v)
-
-        if "," in v and "." in v:
-            v = v.replace(".", "").replace(",", ".")
-        elif "," in v:
-            v = v.replace(",", ".")
-
-        return float(v)
-
-    except:
-        return 0
+def normalizar_colunas(df):
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    return df
 
 
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
     loja = request.form.get("loja")
-    arquivos_tef = request.files.getlist("tef_files")
+    arquivos = request.files.getlist("tef_files")
 
     resumo = {}
 
-    for arquivo in arquivos_tef:
+    for arquivo in arquivos:
 
-        df = pd.read_excel(arquivo, header=None)
+        # encontrar linha do cabeçalho
+        df_temp = pd.read_excel(arquivo, header=None)
 
-        linha_header = None
-
-        for i in range(len(df)):
-
-            linha = df.iloc[i].astype(str).str.lower()
-
-            if "produto" in linha.values:
-                linha_header = i
+        header_row = None
+        for i in range(len(df_temp)):
+            linha = df_temp.iloc[i].astype(str).str.lower().tolist()
+            if "produto" in linha and "operação" in linha:
+                header_row = i
                 break
 
-        if linha_header is None:
+        if header_row is None:
             continue
 
-        df = pd.read_excel(arquivo, header=linha_header)
+        # ler novamente com header correto
+        df = pd.read_excel(arquivo, header=header_row)
+        df = normalizar_colunas(df)
+
+        produto_atual = None
 
         for _, row in df.iterrows():
 
-            produto = str(row.get("Produto", "")).strip()
-            operacao = str(row.get("Operação", "")).lower()
+            produto = str(row.get("produto", "")).strip()
+            operacao = str(row.get("operação", "")).lower()
 
-            if produto == "" or produto == "nan":
-                continue
+            if produto and produto != "nan":
+                produto_atual = produto
 
-            if "total" in operacao:
+            if "total" in operacao and produto_atual:
 
-                valor = converter_valor(row.get("Confirmadas", 0))
+                valor = row.get("confirmadas", 0)
 
-                if produto not in resumo:
-                    resumo[produto] = 0
+                try:
+                    valor = float(valor)
+                except:
+                    valor = 0
 
-                resumo[produto] += valor
+                if produto_atual not in resumo:
+                    resumo[produto_atual] = 0
+
+                resumo[produto_atual] += valor
 
     resultado = f"<h2>Conciliação - Loja {loja}</h2>"
 
