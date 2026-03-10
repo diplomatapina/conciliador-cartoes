@@ -5,24 +5,33 @@ import io
 app = Flask(__name__)
 
 HTML = """
-<h2>Conciliação TEF</h2>
+<h2>Sistema de Conciliação</h2>
 
 <form method="post" action="/conciliar" enctype="multipart/form-data">
-    <p>Relatório TEF:</p>
-    <input type="file" name="tef">
-    <br><br>
-    <button type="submit">Conciliar</button>
+
+<p>Relatório TEF</p>
+<input type="file" name="tef"><br><br>
+
+<p>Relatório Maquineta</p>
+<input type="file" name="maquineta"><br><br>
+
+<p>Extrato Bancário</p>
+<input type="file" name="extrato"><br><br>
+
+<button type="submit">Conciliar</button>
+
 </form>
 
-{% if tabela %}
-<h3>Resumo</h3>
-{{ tabela|safe }}
-
-<h3>Total</h3>
-<p><b>{{ total }}</b></p>
+{% if resultado %}
+<h3>Resultado</h3>
+{{resultado|safe}}
 {% endif %}
 """
 
+
+# ----------------------------
+# LEITOR TEF
+# ----------------------------
 
 def carregar_tef(file):
 
@@ -33,26 +42,44 @@ def carregar_tef(file):
         skiprows=4
     )
 
-    # limpar nomes das colunas
-    df.columns = df.columns.str.replace('"', '').str.strip()
+    df.columns = df.columns.str.replace('"','').str.strip()
 
-    # garantir que coluna valor existe
-    if "Valor" in df.columns:
+    df["Valor"] = (
+        df["Valor"]
+        .astype(str)
+        .str.replace(",",".")
+        .astype(float)
+    )
 
-        df["Valor"] = (
-            df["Valor"]
-            .astype(str)
-            .str.replace(",", ".")
-            .astype(float)
-        )
+    df = df[df["Estado Transação"].str.contains("Efetuada", na=False)]
 
-    # converter data se existir
-    if "Data" in df.columns:
-        df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
+    return df
 
-    # manter apenas aprovadas
-    if "Estado Transação" in df.columns:
-        df = df[df["Estado Transação"].str.contains("Efetuada", na=False)]
+
+# ----------------------------
+# LEITOR MAQUINETA
+# ----------------------------
+
+def carregar_maquineta(file):
+
+    if file.filename.endswith("xlsx"):
+        df = pd.read_excel(file)
+    else:
+        df = pd.read_csv(file)
+
+    return df
+
+
+# ----------------------------
+# LEITOR EXTRATO
+# ----------------------------
+
+def carregar_extrato(file):
+
+    if file.filename.endswith("xlsx"):
+        df = pd.read_excel(file)
+    else:
+        df = pd.read_csv(file)
 
     return df
 
@@ -65,38 +92,74 @@ def home():
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
-    if "tef" not in request.files:
-        return "Arquivo TEF não enviado"
+    resultado = ""
 
-    file = request.files["tef"]
+    # -------------------
+    # TEF
+    # -------------------
 
-    if file.filename == "":
-        return "Arquivo inválido"
+    if "tef" in request.files:
 
-    stream = io.StringIO(file.stream.read().decode("latin1"))
+        file = request.files["tef"]
 
-    df = carregar_tef(stream)
+        stream = io.StringIO(file.stream.read().decode("latin1"))
 
-    if "Tipo Produto" in df.columns:
+        tef = carregar_tef(stream)
 
-        resumo = (
-            df.groupby("Tipo Produto")["Valor"]
-            .sum()
-            .reset_index()
-        )
+        total_tef = tef["Valor"].sum()
 
-    else:
-        resumo = df
+        resultado += f"<p>Total TEF: R$ {total_tef:,.2f}</p>"
 
-    tabela = resumo.to_html(index=False)
 
-    total = f"R$ {df['Valor'].sum():,.2f}"
+    # -------------------
+    # MAQUINETA
+    # -------------------
 
-    return render_template_string(
-        HTML,
-        tabela=tabela,
-        total=total
-    )
+    if "maquineta" in request.files:
+
+        file = request.files["maquineta"]
+
+        maq = carregar_maquineta(file)
+
+        if "Valor" in maq.columns:
+
+            maq["Valor"] = (
+                maq["Valor"]
+                .astype(str)
+                .str.replace(",",".")
+                .astype(float)
+            )
+
+            total_maq = maq["Valor"].sum()
+
+            resultado += f"<p>Total Maquineta: R$ {total_maq:,.2f}</p>"
+
+
+    # -------------------
+    # EXTRATO
+    # -------------------
+
+    if "extrato" in request.files:
+
+        file = request.files["extrato"]
+
+        ext = carregar_extrato(file)
+
+        if "Valor" in ext.columns:
+
+            ext["Valor"] = (
+                ext["Valor"]
+                .astype(str)
+                .str.replace(",",".")
+                .astype(float)
+            )
+
+            total_ext = ext["Valor"].sum()
+
+            resultado += f"<p>Total Extrato: R$ {total_ext:,.2f}</p>"
+
+
+    return render_template_string(HTML, resultado=resultado)
 
 
 if __name__ == "__main__":
