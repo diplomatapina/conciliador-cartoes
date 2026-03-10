@@ -49,55 +49,36 @@ def conciliar():
 
     for file in tef_files:
 
-        try:
+        df = pd.read_excel(file, header=None)
 
-            df = pd.read_excel(file, header=None)
+        linha_produto = None
+        linha_header = None
 
-            ultimo_produto = None
+        for i in range(len(df)):
 
-            for _, row in df.iterrows():
+            linha = df.iloc[i].astype(str).str.lower()
 
-                linha = [str(x).strip() for x in row]
+            if "produto" in " ".join(linha):
+                linha_header = i
 
-                for item in linha:
+        if linha_header is None:
+            continue
 
-                    item_lower = item.lower()
+        df = pd.read_excel(file, header=linha_header)
 
-                    if item_lower in [
-                        "pix",
-                        "ticket alimentacao",
-                        "ticket alimentação",
-                        "ticket flex",
-                        "ticket restaurante",
-                        "alelo alimentação",
-                        "alelo alimentacao",
-                        "alelo refeicao",
-                        "alelo refeição",
-                        "amex credito",
-                        "amex crédito"
-                    ]:
+        for _, row in df.iterrows():
 
-                        ultimo_produto = item
+            produto = str(row.get("Produto", "")).strip()
+            operacao = str(row.get("Operação", "")).lower()
 
-                if "total" in " ".join(linha).lower() and ultimo_produto:
+            if "total" in operacao and produto != "nan":
 
-                    valor = 0
+                valor = converter_valor(row.get("Confirmadas", 0))
 
-                    for item in linha:
+                if produto not in resumo_tef:
+                    resumo_tef[produto] = 0
 
-                        v = converter_valor(item)
-
-                        if v > 0:
-                            valor = v
-                            break
-
-                    if ultimo_produto not in resumo_tef:
-                        resumo_tef[ultimo_produto] = 0
-
-                    resumo_tef[ultimo_produto] += valor
-
-        except Exception as e:
-            print("Erro lendo arquivo:", e)
+                resumo_tef[produto] += valor
 
     resultado = f"<h1>Conciliação - Loja {loja}</h1>"
     resultado += "<h2>Resumo TEF</h2>"
@@ -115,10 +96,3 @@ def conciliar():
         resultado += "Nenhum dado TEF encontrado<br>"
 
     return resultado
-
-
-if __name__ == "__main__":
-
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(host="0.0.0.0", port=port)
