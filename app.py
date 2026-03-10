@@ -27,18 +27,6 @@ def home():
     <input type="file" name="tef_files" multiple>
     </p>
 
-    <p>
-    <label>Upload relatórios Maquineta (PDF):</label><br>
-    <input type="file" name="maquineta_files" multiple>
-    </p>
-
-    <p>
-    <label>Upload extrato bancário (CSV):</label><br>
-    <input type="file" name="extrato_file">
-    </p>
-
-    <br>
-
     <button type="submit">Conciliar</button>
 
     </form>
@@ -46,8 +34,8 @@ def home():
 
 
 def converter_valor(valor):
-    try:
 
+    try:
         if isinstance(valor, (int, float)):
             return float(valor)
 
@@ -69,61 +57,43 @@ def converter_valor(valor):
 def conciliar():
 
     loja = request.form.get("loja")
-
-    arquivos_tef = request.files.getlist("tef_files")
+    arquivos = request.files.getlist("tef_files")
 
     resumo = {}
 
-    for file in arquivos_tef:
+    for file in arquivos:
 
-        try:
+        df = pd.read_excel(file, header=None)
 
-            df = pd.read_excel(file, header=None)
+        header_row = None
 
-            ultimo_produto = None
+        # localizar linha que contém "Produto"
+        for i in range(len(df)):
+            linha = df.iloc[i].astype(str).str.lower()
 
-            for _, row in df.iterrows():
+            if "produto" in " ".join(linha):
+                header_row = i
+                break
 
-                linha = [str(x).strip() for x in row]
+        if header_row is None:
+            continue
 
-                for item in linha:
+        # recriar dataframe com header correto
+        df = pd.read_excel(file, header=header_row)
 
-                    item_lower = item.lower()
+        for _, row in df.iterrows():
 
-                    if item_lower in [
-                        "pix",
-                        "ticket alimentacao",
-                        "ticket alimentação",
-                        "ticket restaurante",
-                        "alelo alimentação",
-                        "alelo alimentacao",
-                        "alelo refeicao",
-                        "alelo refeição",
-                        "amex credito",
-                        "amex crédito"
-                    ]:
+            produto = str(row.get("Produto", "")).strip()
+            operacao = str(row.get("Operação", "")).lower()
 
-                        ultimo_produto = item
+            if "total" in operacao and produto != "nan":
 
-                if "total" in " ".join(linha).lower() and ultimo_produto:
+                valor = converter_valor(row.get("Confirmadas", 0))
 
-                    valor = 0
+                if produto not in resumo:
+                    resumo[produto] = 0
 
-                    for item in linha:
-
-                        v = converter_valor(item)
-
-                        if v > 0:
-                            valor = v
-                            break
-
-                    if ultimo_produto not in resumo:
-                        resumo[ultimo_produto] = 0
-
-                    resumo[ultimo_produto] += valor
-
-        except Exception as e:
-            print("Erro lendo arquivo:", e)
+                resumo[produto] += valor
 
     resultado = f"<h2>Conciliação - Loja {loja}</h2>"
 
