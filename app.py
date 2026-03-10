@@ -27,27 +27,35 @@ def home():
     <input type="file" name="tef_files" multiple>
     </p>
 
+    <p>
+    <label>Upload relatórios Maquineta (PDF):</label><br>
+    <input type="file" name="maquineta_files" multiple>
+    </p>
+
+    <p>
+    <label>Upload extrato bancário (CSV):</label><br>
+    <input type="file" name="extrato_file">
+    </p>
+
     <button type="submit">Conciliar</button>
 
     </form>
     """
 
 
-def converter_valor(valor):
-
+def converter_valor(v):
     try:
-        if isinstance(valor, (int, float)):
-            return float(valor)
+        if isinstance(v, (int, float)):
+            return float(v)
 
-        valor = str(valor)
+        v = str(v)
 
-        if "," in valor and "." in valor:
-            valor = valor.replace(".", "").replace(",", ".")
+        if "," in v and "." in v:
+            v = v.replace(".", "").replace(",", ".")
+        elif "," in v:
+            v = v.replace(",", ".")
 
-        elif "," in valor:
-            valor = valor.replace(",", ".")
-
-        return float(valor)
+        return float(v)
 
     except:
         return 0
@@ -57,36 +65,38 @@ def converter_valor(valor):
 def conciliar():
 
     loja = request.form.get("loja")
-    arquivos = request.files.getlist("tef_files")
+    arquivos_tef = request.files.getlist("tef_files")
 
     resumo = {}
 
-    for file in arquivos:
+    for arquivo in arquivos_tef:
 
-        df = pd.read_excel(file, header=None)
+        df = pd.read_excel(arquivo, header=None)
 
-        header_row = None
+        linha_header = None
 
-        # localizar linha que contém "Produto"
         for i in range(len(df)):
+
             linha = df.iloc[i].astype(str).str.lower()
 
-            if "produto" in " ".join(linha):
-                header_row = i
+            if "produto" in linha.values:
+                linha_header = i
                 break
 
-        if header_row is None:
+        if linha_header is None:
             continue
 
-        # recriar dataframe com header correto
-        df = pd.read_excel(file, header=header_row)
+        df = pd.read_excel(arquivo, header=linha_header)
 
         for _, row in df.iterrows():
 
             produto = str(row.get("Produto", "")).strip()
             operacao = str(row.get("Operação", "")).lower()
 
-            if "total" in operacao and produto != "nan":
+            if produto == "" or produto == "nan":
+                continue
+
+            if "total" in operacao:
 
                 valor = converter_valor(row.get("Confirmadas", 0))
 
@@ -107,6 +117,6 @@ def conciliar():
 
     else:
 
-        resultado += "Nenhum dado TEF encontrado<br>"
+        resultado += "Nenhum dado encontrado"
 
     return resultado
