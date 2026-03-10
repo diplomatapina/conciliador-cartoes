@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request
 import pandas as pd
+import os
 
 app = Flask(__name__)
 
@@ -21,13 +22,11 @@ def converter_valor(valor):
 
     try:
 
-        # já é número
         if isinstance(valor, (int, float)):
             return float(valor)
 
         valor = str(valor)
 
-        # formato brasileiro
         if "," in valor and "." in valor:
             valor = valor.replace(".", "").replace(",", ".")
 
@@ -44,7 +43,6 @@ def converter_valor(valor):
 def conciliar():
 
     loja = request.form.get("loja")
-
     tef_files = request.files.getlist("tef_files")
 
     resumo_tef = {}
@@ -61,7 +59,6 @@ def conciliar():
 
                 linha = [str(x).strip() for x in row]
 
-                # detectar produtos
                 for item in linha:
 
                     item_lower = item.lower()
@@ -82,7 +79,6 @@ def conciliar():
 
                         ultimo_produto = item
 
-                # detectar linha TOTAL
                 if "total" in " ".join(linha).lower() and ultimo_produto:
 
                     valor = 0
@@ -122,4 +118,7 @@ def conciliar():
 
 
 if __name__ == "__main__":
-    app.run()
+
+    port = int(os.environ.get("PORT", 10000))
+
+    app.run(host="0.0.0.0", port=port)
