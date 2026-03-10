@@ -3,6 +3,7 @@ import pandas as pd
 
 app = Flask(__name__)
 
+
 @app.route("/")
 def home():
     return """
@@ -22,24 +23,61 @@ def home():
     <input type="file" name="tef_files" multiple>
     </p>
 
+    <p>
+    Upload relatórios Maquineta (PDF):<br>
+    <input type="file" name="maquineta_files" multiple>
+    </p>
+
+    <p>
+    Upload extrato bancário (CSV):<br>
+    <input type="file" name="extrato_file">
+    </p>
+
     <button type="submit">Conciliar</button>
 
     </form>
     """
 
+
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
-    arquivos = request.files.getlist("tef_files")
+    loja = request.form.get("loja")
+    tef_files = request.files.getlist("tef_files")
 
-    resultado = "<h2>Diagnóstico do Excel</h2>"
+    resumo = {}
 
-    for arquivo in arquivos:
+    for arquivo in tef_files:
 
         df = pd.read_excel(arquivo, header=None)
 
-        resultado += "<h3>Primeiras 15 linhas da planilha</h3>"
-        resultado += df.head(15).to_html()
+        produto_atual = None
+
+        for i in range(7, len(df)):
+
+            produto = str(df.iloc[i,3])
+            operacao = str(df.iloc[i,5]).lower()
+            valor = df.iloc[i,6]
+
+            if produto != "nan":
+                produto_atual = produto
+
+            if "total" in operacao:
+
+                try:
+                    valor = float(valor)
+                except:
+                    valor = 0
+
+                resumo[produto_atual] = resumo.get(produto_atual, 0) + valor
+
+    resultado = f"<h2>Conciliação - Loja {loja}</h2>"
+
+    for produto, valor in resumo.items():
+
+        valor = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X",".")
+
+        resultado += f"{produto}: R$ {valor}<br>"
 
     return resultado
 
