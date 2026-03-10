@@ -3,7 +3,6 @@ import pandas as pd
 
 app = Flask(__name__)
 
-
 @app.route("/")
 def home():
     return """
@@ -12,14 +11,14 @@ def home():
     <form action="/conciliar" method="post" enctype="multipart/form-data">
 
     <p>
-    <label>Loja:</label><br>
+    Loja:<br>
     <select name="loja">
         <option>Pina</option>
     </select>
     </p>
 
     <p>
-    <label>Relatórios TEF:</label><br>
+    Relatórios TEF:<br>
     <input type="file" name="tef_files" multiple>
     </p>
 
@@ -60,13 +59,17 @@ def conciliar():
 
         df = pd.read_excel(arquivo, header=header)
 
+        produto_atual = None
+
         for _, row in df.iterrows():
 
-            operacao = str(row.get("Operação", ""))
+            produto = str(row.get("Produto", "")).strip()
+            operacao = str(row.get("Operação", "")).lower()
 
-            if "Total" in operacao:
+            if produto and produto != "nan":
+                produto_atual = produto
 
-                produto = str(row.get("Produto", "")).strip()
+            if "total" in operacao:
 
                 valor = row.get("Confirmadas", 0)
 
@@ -75,7 +78,7 @@ def conciliar():
                 except:
                     valor = 0
 
-                resumo[produto] = resumo.get(produto, 0) + valor
+                resumo[produto_atual] = resumo.get(produto_atual, 0) + valor
 
     resultado = "<h2>Conciliação - Loja Pina</h2>"
 
@@ -83,9 +86,9 @@ def conciliar():
 
         for produto, valor in resumo.items():
 
-            valor = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-            resultado += f"{produto}: R$ {valor}<br>"
+            resultado += f"{produto}: R$ {valor_formatado}<br>"
 
     else:
 
