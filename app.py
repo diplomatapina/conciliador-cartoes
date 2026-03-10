@@ -1,7 +1,41 @@
 from flask import Flask, request
 import pandas as pd
+import unicodedata
 
 app = Flask(__name__)
+
+
+def normalizar_texto(txt):
+    txt = str(txt).strip().lower()
+    txt = unicodedata.normalize("NFKD", txt)
+    txt = "".join(c for c in txt if not unicodedata.combining(c))
+    return txt
+
+
+def encontrar_header(df):
+    for i in range(len(df)):
+        linha = [normalizar_texto(x) for x in df.iloc[i]]
+        if "produto" in linha and ("operacao" in linha or "operação" in linha):
+            return i
+    return None
+
+
+def identificar_colunas(df):
+    col_produto = None
+    col_operacao = None
+    col_valor = None
+
+    for c in df.columns:
+        n = normalizar_texto(c)
+
+        if "produto" in n:
+            col_produto = c
+        if "operacao" in n:
+            col_operacao = c
+        if "confirm" in n or "valor" in n:
+            col_valor = c
+
+    return col_produto, col_operacao, col_valor
 
 
 @app.route("/")
@@ -43,11 +77,6 @@ def home():
     """
 
 
-def normalizar_colunas(df):
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    return df
-
-
 @app.route("/conciliar", methods=["POST"])
 def conciliar():
 
@@ -58,59 +87,45 @@ def conciliar():
 
     for arquivo in arquivos:
 
-        # encontrar linha do cabeçalho
-        df_temp = pd.read_excel(arquivo, header=None)
+        df_raw = pd.read_excel(arquivo, header=None)
 
-        header_row = None
-        for i in range(len(df_temp)):
-            linha = df_temp.iloc[i].astype(str).str.lower().tolist()
-            if "produto" in linha and "operação" in linha:
-                header_row = i
-                break
-
+        header_row = encontrar_header(df_raw)
         if header_row is None:
             continue
 
-        # ler novamente com header correto
         df = pd.read_excel(arquivo, header=header_row)
-        df = normalizar_colunas(df)
+
+        col_produto, col_operacao, col_valor = identificar_colunas(df)
+
+        if not col_produto or not col_operacao or not col_valor:
+            continue
 
         produto_atual = None
 
         for _, row in df.iterrows():
 
-            produto = str(row.get("produto", "")).strip()
-            operacao = str(row.get("operação", "")).lower()
+            produto = str(row[col_produto]).strip()
+            operacao = normalizar_texto(row[col_operacao])
 
-            if produto and produto != "nan":
+            if produto and produto.lower() != "nan":
                 produto_atual = produto
 
             if "total" in operacao and produto_atual:
 
-                valor = row.get("confirmadas", 0)
-
                 try:
-                    valor = float(valor)
+                    valor = float(row[col_valor])
                 except:
                     valor = 0
 
-                if produto_atual not in resumo:
-                    resumo[produto_atual] = 0
-
-                resumo[produto_atual] += valor
+                resumo[produto_atual] = resumo.get(produto_atual, 0) + valor
 
     resultado = f"<h2>Conciliação - Loja {loja}</h2>"
 
     if resumo:
-
         for produto, valor in resumo.items():
-
-            valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-            resultado += f"{produto}: R$ {valor_formatado}<br>"
-
+            valor_fmt = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            resultado += f"{produto}: R$ {valor_fmt}<br>"
     else:
-
         resultado += "Nenhum dado encontrado"
 
     return resultado
