@@ -1,86 +1,120 @@
-from flask import Flask, request
+import streamlit as st
 import pandas as pd
 
-app = Flask(__name__)
+st.set_page_config(page_title="Conciliação TEF", layout="wide")
+
+st.title("Conciliação de Cartões")
+
+st.write("Envie os três arquivos para conciliar:")
+
+tef_file = st.file_uploader("1️⃣ Relatório TEF", type=["csv"])
+maq_file = st.file_uploader("2️⃣ Relatório da Maquineta", type=["csv","xlsx"])
+ext_file = st.file_uploader("3️⃣ Extrato Bancário", type=["csv","xlsx"])
 
 
-@app.route("/")
-def home():
-    return """
-    <h1>Sistema de Conciliação</h1>
+# ---------------------------
+# LEITURA DO TEF
+# ---------------------------
 
-    <form action="/conciliar" method="post" enctype="multipart/form-data">
+def carregar_tef(file):
 
-    <p>
-    Loja:<br>
-    <select name="loja">
-        <option>Pina</option>
-    </select>
-    </p>
+    df = pd.read_csv(
+        file,
+        sep=";",
+        encoding="latin1",
+        skiprows=4
+    )
 
-    <p>
-    Upload relatórios TEF (Excel):<br>
-    <input type="file" name="tef_files" multiple>
-    </p>
+    df.columns = df.columns.str.replace('"', '').str.strip()
 
-    <p>
-    Upload relatórios Maquineta (PDF):<br>
-    <input type="file" name="maquineta_files" multiple>
-    </p>
+    df["Valor"] = (
+        df["Valor"]
+        .astype(str)
+        .str.replace(",", ".")
+        .astype(float)
+    )
 
-    <p>
-    Upload extrato bancário (CSV):<br>
-    <input type="file" name="extrato_file">
-    </p>
+    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
 
-    <button type="submit">Conciliar</button>
+    df = df[df["Estado Transação"] == "Efetuada PDV"]
 
-    </form>
-    """
+    return df
 
 
-@app.route("/conciliar", methods=["POST"])
-def conciliar():
+# ---------------------------
+# LEITURA MAQUINETA
+# ---------------------------
 
-    loja = request.form.get("loja")
-    tef_files = request.files.getlist("tef_files")
+def carregar_maquineta(file):
 
-    resumo = {}
+    if file.name.endswith("xlsx"):
+        df = pd.read_excel(file)
+    else:
+        df = pd.read_csv(file)
 
-    for arquivo in tef_files:
-
-        df = pd.read_excel(arquivo, header=None)
-
-        produto_atual = None
-
-        for i in range(7, len(df)):
-
-            produto = str(df.iloc[i,3])
-            operacao = str(df.iloc[i,5]).lower()
-            valor = df.iloc[i,6]
-
-            if produto != "nan":
-                produto_atual = produto
-
-            if "total" in operacao:
-
-                try:
-                    valor = float(valor)
-                except:
-                    valor = 0
-
-                resumo[produto_atual] = resumo.get(produto_atual, 0) + valor
-
-    resultado = f"<h2>Conciliação - Loja {loja}</h2>"
-
-    for produto, valor in resumo.items():
-
-        valor = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X",".")
-
-        resultado += f"{produto}: R$ {valor}<br>"
-
-    return resultado
+    return df
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# ---------------------------
+# LEITURA EXTRATO
+# ---------------------------
+
+def carregar_extrato(file):
+
+    if file.name.endswith("xlsx"):
+        df = pd.read_excel(file)
+    else:
+        df = pd.read_csv(file)
+
+    return df
+
+
+# ---------------------------
+# PROCESSAMENTO
+# ---------------------------
+
+if tef_file:
+
+    tef = carregar_tef(tef_file)
+
+    st.subheader("TEF carregado")
+
+    st.dataframe(tef, use_container_width=True)
+
+    resumo_tef = (
+        tef.groupby(["Data","Tipo Produto"])["Valor"]
+        .sum()
+        .reset_index()
+    )
+
+    st.subheader("Resumo TEF")
+
+    st.dataframe(resumo_tef)
+
+
+    if maq_file:
+
+        maq = carregar_maquineta(maq_file)
+
+        st.subheader("Relatório Maquineta")
+
+        st.dataframe(maq)
+
+    if ext_file:
+
+        ext = carregar_extrato(ext_file)
+
+        st.subheader("Extrato Bancário")
+
+        st.dataframe(ext)
+
+
+    # ---------------------------
+    # RESUMO GERAL
+    # ---------------------------
+
+    st.subheader("Totais TEF")
+
+    total_tef = tef["Valor"].sum()
+
+    st.metric("Total TEF", f"R$ {total_tef:,.2f}")
