@@ -1,21 +1,36 @@
-from flask import Flask, render_template, request
+from flask import Flask, request
 import pandas as pd
-import os
 
 app = Flask(__name__)
 
-lojas = [
-    "Pina",
-    "Navegantes",
-    "Setubal",
-    "Conselheiro",
-    "Exclusive"
-]
-
 
 @app.route("/")
-def index():
-    return render_template("index.html", lojas=lojas)
+def home():
+    return """
+    <h1>Sistema de Conciliação</h1>
+
+    <form action="/conciliar" method="post" enctype="multipart/form-data">
+
+    Loja:
+    <select name="loja">
+        <option>Pina</option>
+        <option>Navegantes</option>
+        <option>Setubal</option>
+        <option>Conselheiro</option>
+        <option>Exclusive</option>
+    </select>
+
+    <br><br>
+
+    Relatórios TEF:
+    <input type="file" name="tef_files" multiple>
+
+    <br><br>
+
+    <button type="submit">Conciliar</button>
+
+    </form>
+    """
 
 
 def converter_valor(valor):
@@ -43,56 +58,63 @@ def converter_valor(valor):
 def conciliar():
 
     loja = request.form.get("loja")
-    tef_files = request.files.getlist("tef_files")
 
-    resumo_tef = {}
+    arquivos = request.files.getlist("tef_files")
 
-    for file in tef_files:
+    resumo = {}
+
+    for file in arquivos:
 
         df = pd.read_excel(file, header=None)
 
-        linha_produto = None
-        linha_header = None
-
-        for i in range(len(df)):
-
-            linha = df.iloc[i].astype(str).str.lower()
-
-            if "produto" in " ".join(linha):
-                linha_header = i
-
-        if linha_header is None:
-            continue
-
-        df = pd.read_excel(file, header=linha_header)
+        ultimo_produto = None
 
         for _, row in df.iterrows():
 
-            produto = str(row.get("Produto", "")).strip()
-            operacao = str(row.get("Operação", "")).lower()
+            linha = [str(x).strip() for x in row]
 
-            if "total" in operacao and produto != "nan":
+            for item in linha:
 
-                valor = converter_valor(row.get("Confirmadas", 0))
+                item = item.lower()
 
-                if produto not in resumo_tef:
-                    resumo_tef[produto] = 0
+                if item in [
+                    "pix",
+                    "ticket alimentacao",
+                    "ticket alimentação",
+                    "ticket restaurante",
+                    "alelo alimentação",
+                    "alelo alimentacao",
+                    "alelo refeicao",
+                    "alelo refeição",
+                    "amex credito",
+                    "amex crédito"
+                ]:
 
-                resumo_tef[produto] += valor
+                    ultimo_produto = item
 
-    resultado = f"<h1>Conciliação - Loja {loja}</h1>"
-    resultado += "<h2>Resumo TEF</h2>"
+            if "total" in " ".join(linha).lower() and ultimo_produto:
 
-    if resumo_tef:
+                valor = 0
 
-        for produto, valor in resumo_tef.items():
+                for item in linha:
 
-            valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    v = converter_valor(item)
 
-            resultado += f"{produto}: R$ {valor_formatado}<br>"
+                    if v > 0:
+                        valor = v
+                        break
 
-    else:
+                if ultimo_produto not in resumo:
+                    resumo[ultimo_produto] = 0
 
-        resultado += "Nenhum dado TEF encontrado<br>"
+                resumo[ultimo_produto] += valor
+
+    resultado = f"<h2>Conciliação - Loja {loja}</h2>"
+
+    for produto, valor in resumo.items():
+
+        valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        resultado += f"{produto}: R$ {valor_formatado}<br>"
 
     return resultado
